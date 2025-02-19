@@ -6,14 +6,20 @@ Data Selection:
 - Loads AllTraining.parquet and AllTesting.parquet.
 - Maps labels: "Benign" → 0, everything else → 1.
 - Drops rows with missing numeric feature values.
-- Saves CSV files for training and testing that still include src and dst
-  for later reporting.
+- Saves CSV files (X_train.csv, y_train.csv, X_test.csv, y_test.csv) that include
+  src and dst for later reporting. The numeric features are expected to be:
+  packets, duration, rate, mean, std, max, min, tcp, udp, dns, icmp, syn, ack,
+  psh, fin, urg, rst, sport, dport.
 """
 
 import pandas as pd
 
+# Define the desired numeric feature order:
+FEATURE_ORDER = ["packets", "duration", "rate", "mean", "std", "max", "min", 
+                 "tcp", "udp", "dns", "icmp", "syn", "ack", "psh", "fin", 
+                 "urg", "rst", "sport", "dport"]
+
 def main():
-    # Load combined Parquet files
     try:
         all_train_df = pd.read_parquet("AllTraining.parquet")
         print("Loaded AllTraining.parquet with shape:", all_train_df.shape)
@@ -36,25 +42,22 @@ def main():
     print("\n=== Label distribution after mapping (TRAIN) ===")
     print(all_train_df["Label"].value_counts(dropna=False))
 
-    # Determine feature columns to be used for training.
-    # We want to exclude src and dst (non-numeric) from training features,
-    # but keep them in the CSV for later reporting.
-    all_columns = all_train_df.columns.tolist()
-    # Exclude 'Label', 'src', and 'dst' to get numeric features
-    numeric_cols = [c for c in all_columns if c not in ["Label", "src", "dst"]]
-
+    # Ensure that all desired numeric features are present
+    missing = [col for col in FEATURE_ORDER if col not in all_train_df.columns]
+    if missing:
+        print("Warning: The following expected numeric features are missing in training data:", missing)
+    
     # Drop rows with missing numeric feature values
-    all_train_df.dropna(subset=numeric_cols, inplace=True)
-    all_test_df.dropna(subset=numeric_cols, inplace=True)
+    all_train_df.dropna(subset=FEATURE_ORDER, inplace=True)
+    all_test_df.dropna(subset=FEATURE_ORDER, inplace=True)
 
-    print("\n=== Shapes after dropping missing numeric features ===")
+    print("\n=== Shapes after dropping rows with missing numeric features ===")
     print("Train shape:", all_train_df.shape)
     print("Test shape:", all_test_df.shape)
 
-    # Save full CSV files (including src and dst)
+    # Save CSV files including all columns (src, dst, numeric features, Label)
     all_train_df.to_csv("X_train.csv", index=False)
     all_test_df.to_csv("X_test.csv", index=False)
-    # Save labels separately if needed (or can be extracted from the CSV)
     all_train_df[["Label"]].to_csv("y_train.csv", index=False)
     all_test_df[["Label"]].to_csv("y_test.csv", index=False)
     print("\nSaved CSV files: X_train.csv, y_train.csv, X_test.csv, y_test.csv")
