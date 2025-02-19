@@ -4,7 +4,9 @@
 """
 Train:
 - Reads X_train.csv and y_train.csv (which include src and dst along with numeric features).
-- Drops the src and dst columns before scaling and training.
+- Drops the src and dst columns before scaling.
+- Reorders the remaining features using the defined FEATURE_ORDER:
+  packets, duration, rate, mean, std, max, min, tcp, udp, dns, icmp, syn, ack, psh, fin, urg, rst, sport, dport.
 - Creates PyTorch Datasets and DataLoaders.
 - Defines and trains the Hybrid CNN+Transformer model.
 - Evaluates on X_test.csv/y_test.csv and saves the model state.
@@ -19,6 +21,11 @@ import torch.optim as optim
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
 from sklearn.metrics import accuracy_score
+
+# Define the desired numeric feature order
+FEATURE_ORDER = ["packets", "duration", "rate", "mean", "std", "max", "min", 
+                 "tcp", "udp", "dns", "icmp", "syn", "ack", "psh", "fin", 
+                 "urg", "rst", "sport", "dport"]
 
 # -----------------------
 # Dataset & Collate
@@ -97,21 +104,20 @@ class HybridModel(nn.Module):
         transformer_out = self.transformer(cnn_out)  # [batch_size, seq_len, embed_dim]
         pooled = torch.mean(transformer_out, dim=1)    # [batch_size, embed_dim]
         logits = self.fc(pooled)                        # [batch_size, num_classes]
-        # For binary classification, apply sigmoid
+        # For binary classification, apply sigmoid activation
         if logits.shape[1] == 1:
             return torch.sigmoid(logits)
         else:
             return logits
 
 def main():
-    # STEP 1: Load CSV data (which include all fields)
+    # STEP 1: Load CSV data (which include src and dst along with numeric features)
     X_train_df = pd.read_csv("X_train.csv")
     y_train_df = pd.read_csv("y_train.csv")
     X_test_df  = pd.read_csv("X_test.csv")
     y_test_df  = pd.read_csv("y_test.csv")
 
-    # Retain src and dst for potential reporting later, but drop them for training.
-    # Assume these columns exist.
+    # Retain src and dst for potential reporting; drop them for training.
     if "src" in X_train_df.columns and "dst" in X_train_df.columns:
         train_ids = X_train_df[["src", "dst"]]
         X_train_features = X_train_df.drop(columns=["src", "dst"])
@@ -124,13 +130,17 @@ def main():
     else:
         X_test_features = X_test_df.copy()
 
+    # Reorder columns according to FEATURE_ORDER
+    X_train_features = X_train_features[FEATURE_ORDER]
+    X_test_features  = X_test_features[FEATURE_ORDER]
+
     # Convert to NumPy arrays
     X_train_np = X_train_features.values
     y_train_np = y_train_df.values.squeeze()
     X_test_np  = X_test_features.values
     y_test_np  = y_test_df.values.squeeze()
 
-    # STEP 2: Scale data (using only numeric features)
+    # STEP 2: Scale data
     scaler = StandardScaler()
     X_train_scaled = scaler.fit_transform(X_train_np)
     X_test_scaled  = scaler.transform(X_test_np)
@@ -147,13 +157,13 @@ def main():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print("Using device:", device)
 
-    IN_CHANNELS  = 1        # Because data will be reshaped to [batch_size, 1, num_features]
+    IN_CHANNELS  = 1        # Data reshaped to [batch_size, 1, num_features]
     OUT_CHANNELS = 64
     EMBED_DIM    = 128
     N_HEADS      = 4
     NUM_LAYERS   = 3
     NUM_CLASSES  = 1        # Binary classification
-    NUM_EPOCHS   = 10       # Adjust epochs as needed
+    NUM_EPOCHS   = 10       # Adjust as needed
 
     model = HybridModel(
         in_channels=IN_CHANNELS,
@@ -205,7 +215,7 @@ def main():
     acc = accuracy_score(all_labels, all_preds)
     print(f"Test Accuracy: {acc:.4f}")
 
-    # STEP 7: Save the trained model and scaler if needed
+    # STEP 7: Save the trained model (and consider saving the scaler for production use)
     torch.save(model.state_dict(), "cnn_transformer.pt")
     print("Model state saved to 'cnn_transformer.pt'")
 
