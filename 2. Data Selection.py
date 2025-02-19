@@ -1,218 +1,63 @@
 #!/usr/bin/env python
 # coding: utf-8
 
-
+"""
+Data Selection:
+- Loads AllTraining.parquet and AllTesting.parquet.
+- Maps labels: "Benign" → 0, everything else → 1.
+- Drops rows with missing numeric feature values.
+- Saves CSV files for training and testing that still include src and dst
+  for later reporting.
+"""
 
 import pandas as pd
-from sklearn.utils import resample
 
-
-# # Benign
-
-
-
-b1 = pd.read_pickle("Pickles/Part 1/Benign1/ddos_part1_benign1.pkl", compression="gzip")
-b1 = b1.sort_values("packets", ascending=False)
-
-
-
-
-b1.iloc[15:30,:]
-
-
-
-
-b1 = b1[b1["packets"]>500]
-len(b1)
-
-
-
-
-b21 = pd.read_pickle("Pickles/Part 1/Benign2/ddos_part1_benign21.pkl", compression="gzip")
-b21 = b21.sort_values("packets", ascending=False)
-
-
-
-
-b21 = b21[b21["packets"]>500]
-
-
-
-
-b22 = pd.read_pickle("Pickles/Part 1/Benign2/ddos_part1_benign22.pkl", compression="gzip")
-b22 = b22.sort_values("packets", ascending=False)
-
-
-
-
-b22 = b22[b22["packets"]>500]
-
-
-
-
-b31 = pd.read_pickle("Pickles/Part 1/Benign3/ddos_part1_benign31.pkl", compression="gzip")
-b31 = b31.sort_values("packets", ascending=False)
-
-
-
-
-b31 = b31[b31["packets"]>500]
-
-
-
-
-b32 = pd.read_pickle("Pickles/Part 1/Benign3/ddos_part1_benign32.pkl", compression="gzip")
-b32 = b32.sort_values("packets", ascending=False)
-
-
-
-
-b32 = b32[b32["packets"]>500]
-
-
-
-
-p2p11 = pd.read_pickle("Pickles/Part 1/P2pbox/ddos_part1_benign_p2pbox11.pkl", compression="gzip")
-p2p11 = p2p11.sort_values("packets", ascending=False)
-
-
-
-
-p2p11 = p2p11[p2p11["packets"]>500]
-
-
-
-
-p2p12 = pd.read_pickle("Pickles/Part 1/P2pbox/ddos_part1_benign_p2pbox12.pkl", compression="gzip")
-p2p12 = p2p12.sort_values("packets", ascending=False)
-
-
-
-
-p2p12 = p2p12[p2p12["packets"]>500]
-
-
-
-
-b2_1 = pd.DataFrame([],columns=["src", "dst","output","packets","duration","rate","mean","std","max","min", "tcp",                "udp", "dns","icmp","syn", "ack","psh", "fin","urg","rst","sport","dport"])
-
-
-
-
-for i in range(1,7):
-    df = pd.read_pickle(f"Pickles/Part 2/Benign/newBenign{i}")
-    b2_1 = pd.concat([b2_1,df], ignore_index=True)
-
-
-
-
-b2_1 = b2_1.sort_values("packets", ascending=False)
-
-
-
-
-b2_1 = b2_1[b2_1["packets"]>500]
-
-
-
-
-allbenign = pd.concat([b1, b21, b22, b31, b32, p2p11, p2p12, b2_1])
-
-
-
-
-largebenign = allbenign[allbenign["packets"]>15000]
-len(largebenign)
-
-
-
-
-smallbenign = allbenign[allbenign["packets"]<15000]
-len(smallbenign)
-
-
-
-
-resampled_smallbenign = resample(smallbenign, n_samples=50, replace=False, random_state=42)
-
-
-
-
-benign = pd.concat([largebenign,resampled_smallbenign])
-
-
-
-
-benign.to_pickle("Benign_resampled.pkl")
-
-
-
-
-len(benign)
-
-
-# # Attack
-
-
-
-attack1 = pd.DataFrame([],columns=["src", "dst","output","packets","duration","rate","mean","std","max","min", "tcp",                "udp", "dns","icmp","syn", "ack","psh", "fin","urg","rst","sport","dport"])
-for i in range(1,5):
-    df = pd.read_pickle(f"Pickles/Part 1/Attack/ddos_part1_attack{i}.pkl")
-    attack1 = pd.concat([attack1,df], ignore_index=True)
-
-
-
-
-for i in range(1,32):
-    df = pd.read_pickle(f"Pickles/Part 2/Attack/newDDoS{i}")
-    attack1 = pd.concat([attack1,df], ignore_index=True)
-
-
-
-
-attack1.to_pickle("Attack.pkl")
-
-
-# # Train
-
-
-
-train = pd.concat([benign,attack1], ignore_index=True)
-
-
-
-
-train["output"] = (train["output"]!="Benign").astype(int)
-
-
-
-
-train.to_pickle("Train_res.pkl")
-
-
-
-
-y_train = train["output"]
-
-
-
-
-X_train = train.drop(columns=["output"])
-
-
-
-
-X_train.to_pickle("X_train_res.pkl")
-y_train.to_pickle("y_train_res.pkl")
-
-
-
-
-X_train.to_csv("X_train_res.csv", index=False)
-y_train.to_csv("y_train_res.csv", index=False)
-
-
-
-
-pd.Series(X_train.drop(columns=["src","dst"]).columns).to_csv("features.txt", sep=" ")
-
+def main():
+    # Load combined Parquet files
+    try:
+        all_train_df = pd.read_parquet("AllTraining.parquet")
+        print("Loaded AllTraining.parquet with shape:", all_train_df.shape)
+    except Exception as e:
+        print("Error loading 'AllTraining.parquet':", e)
+        return
+
+    try:
+        all_test_df = pd.read_parquet("AllTesting.parquet")
+        print("Loaded AllTesting.parquet with shape:", all_test_df.shape)
+    except Exception as e:
+        print("Error loading 'AllTesting.parquet':", e)
+        return
+
+    # Map labels (assumes the label column is named "Label")
+    print("\n=== Label distribution before mapping (TRAIN) ===")
+    print(all_train_df["Label"].value_counts(dropna=False))
+    all_train_df["Label"] = all_train_df["Label"].apply(lambda x: 0 if x == "Benign" else 1)
+    all_test_df["Label"]  = all_test_df["Label"].apply(lambda x: 0 if x == "Benign" else 1)
+    print("\n=== Label distribution after mapping (TRAIN) ===")
+    print(all_train_df["Label"].value_counts(dropna=False))
+
+    # Determine feature columns to be used for training.
+    # We want to exclude src and dst (non-numeric) from training features,
+    # but keep them in the CSV for later reporting.
+    all_columns = all_train_df.columns.tolist()
+    # Exclude 'Label', 'src', and 'dst' to get numeric features
+    numeric_cols = [c for c in all_columns if c not in ["Label", "src", "dst"]]
+
+    # Drop rows with missing numeric feature values
+    all_train_df.dropna(subset=numeric_cols, inplace=True)
+    all_test_df.dropna(subset=numeric_cols, inplace=True)
+
+    print("\n=== Shapes after dropping missing numeric features ===")
+    print("Train shape:", all_train_df.shape)
+    print("Test shape:", all_test_df.shape)
+
+    # Save full CSV files (including src and dst)
+    all_train_df.to_csv("X_train.csv", index=False)
+    all_test_df.to_csv("X_test.csv", index=False)
+    # Save labels separately if needed (or can be extracted from the CSV)
+    all_train_df[["Label"]].to_csv("y_train.csv", index=False)
+    all_test_df[["Label"]].to_csv("y_test.csv", index=False)
+    print("\nSaved CSV files: X_train.csv, y_train.csv, X_test.csv, y_test.csv")
+
+if __name__ == "__main__":
+    main()
