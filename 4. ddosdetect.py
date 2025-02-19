@@ -7,6 +7,8 @@ ddosdetect.py:
 - Reads a new CSV (or Parquet) file containing Wireshark-derived features.
 - Uses specified src and dst columns (if available) for final reporting.
 - Drops src and dst before scaling and inference.
+- Reorders the remaining features using FEATURE_ORDER:
+  packets, duration, rate, mean, std, max, min, tcp, udp, dns, icmp, syn, ack, psh, fin, urg, rst, sport, dport.
 - Writes predictions to prediction.txt with columns: src, dst, prediction.
   
 Usage:
@@ -23,6 +25,11 @@ import torch.nn as nn
 import torch.nn.functional as F
 from torch.utils.data import Dataset, DataLoader
 from sklearn.preprocessing import StandardScaler
+
+# Define the desired numeric feature order
+FEATURE_ORDER = ["packets", "duration", "rate", "mean", "std", "max", "min", 
+                 "tcp", "udp", "dns", "icmp", "syn", "ack", "psh", "fin", 
+                 "urg", "rst", "sport", "dport"]
 
 # ------------------------------------------------
 # Model Definition (same as in Train.py)
@@ -153,7 +160,10 @@ def main():
     features_df = df.drop(columns=drop_cols, errors="ignore")
     features_df.dropna(inplace=True)
 
-    # Scale features (in practice, use the scaler from training)
+    # Reorder features to match FEATURE_ORDER
+    features_df = features_df[FEATURE_ORDER]
+
+    # Scale features (in production, use the same scaler from training)
     scaler = StandardScaler()
     features_scaled = scaler.fit_transform(features_df.values)
 
