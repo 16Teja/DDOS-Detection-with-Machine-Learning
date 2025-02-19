@@ -6,7 +6,8 @@ Feature Extraction:
 - Combines all *training.parquet files into AllTraining.parquet 
   and all *testing.parquet files into AllTesting.parquet.
 - These Parquet files are assumed to contain all fields extracted
-  from Wireshark (e.g. src, dst, packets, duration, rate, mean, std, ack, psh, fin, urg, rst, sport, dport, etc.).
+  from Wireshark (e.g. src, dst, packets, duration, rate, mean, std, max, min,
+  tcp, udp, dns, icmp, syn, ack, psh, fin, urg, rst, sport, dport, etc.).
 """
 
 import os
@@ -16,7 +17,7 @@ import pandas as pd
 def combine_parquet_files(data_folder="."):
     # Find all Parquet files for training and testing
     training_files = glob.glob(os.path.join(data_folder, "*training.parquet"))
-    testing_files = glob.glob(os.path.join(data_folder, "*testing.parquet"))
+    testing_files  = glob.glob(os.path.join(data_folder, "*testing.parquet"))
 
     print("Found training files:", training_files)
     print("Found testing files:", testing_files)
